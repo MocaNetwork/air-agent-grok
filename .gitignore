@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Never commit an agent key, delegation bundle or pending login
+*.pem
+bundle.json
+pending-login.json
+
+.DS_Store
+*.zip

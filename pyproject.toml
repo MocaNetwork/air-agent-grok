@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "air-agent-kya-grok"
+version = "0.1.0"
+description = "AIR Agent KYA for Grok Bot: prove who the agent acts for at AIR Know-Your-Agent stores (Moca Network)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27,<1",
+  "httpcore>=1,<2",
+  "cryptography>=42,<47",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+air-kya = "air_kya.cli:main"
+
+[tool.setuptools]
+packages = ["air_kya"]
