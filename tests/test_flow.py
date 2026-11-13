@@ -447,3 +447,51 @@ def test_cli_visit_refuses_private_site(store, capsys):
     for url in ("https://169.254.169.254", "http://127.0.0.1:6379"):
         code, out = run_cli(capsys, "visit", url)
         assert code == 1 and out["code"] == "SITE_NOT_PUBLIC"
+
+
+# ------------------------------------------------------------------ fake-IP proxies (Grok Bot computer)
+
+
+def test_fake_ip_range_only_when_allowed():
+    resolve = fake_resolver({"kya.demo.air3.com": ["198.18.0.1"], "edge.example": ["198.19.255.254"],
+                             "mixed.example": ["198.18.0.7", "10.0.0.7"], "meta.example": ["169.254.169.254"],
+                             "testnet.example": ["192.0.2.1"]})
+    with pytest.raises(VisitError, match="AIR_KYA_ALLOW_PROXY_FAKE_IP") as exc:
+        kya.checked_addresses("kya.demo.air3.com", 443, resolve=resolve)
+    assert exc.value.extra["code"] == "SITE_NOT_PUBLIC"
+    assert kya.checked_addresses("kya.demo.air3.com", 443, allow_fake_ip=True, resolve=resolve) == ["198.18.0.1"]
+    assert kya.checked_addresses("edge.example", 443, allow_fake_ip=True, resolve=resolve) == ["198.19.255.254"]
+    for host in ("mixed.example", "meta.example", "testnet.example"):  # private, metadata, other reserved: refused
+        with pytest.raises(VisitError, match="non-public"):
+            kya.checked_addresses(host, 443, allow_fake_ip=True, resolve=resolve)
+
+
+def test_fake_ip_never_allowed_as_literal_url():
+    with pytest.raises(VisitError) as exc:
+        kya.site_base("https://198.18.0.1")
+    assert exc.value.extra["code"] == "SITE_NOT_PUBLIC"
+
+
+def test_backend_connects_to_fake_ip_when_allowed():
+    inner = RecordingBackend()
+    backend = kya.PublicOnlyBackend(allow_fake_ip=True, resolve=lambda h, p: ["198.18.0.1"], inner=inner)
+    with pytest.raises(httpcore.ConnectError):
+        backend.connect_tcp("kya.demo.air3.com", 443)
+    assert inner.connected == [("198.18.0.1", 443)]
+
+
+def test_cli_allows_fake_ip_by_default(store, capsys, monkeypatch):
+    http, _ = site_and_air()
+    opts = []
+
+    def site_client(**k):
+        opts.append(k)
+        return httpx.Client(transport=http._transport)
+
+    monkeypatch.setattr(cli, "_air_client", lambda *a, **k: httpx.Client(transport=http._transport))
+    monkeypatch.setattr(cli, "site_client", site_client)
+    run_cli(capsys, "visit", SITE)
+    monkeypatch.setenv("AIR_KYA_ALLOW_PROXY_FAKE_IP", "0")
+    run_cli(capsys, "visit", SITE)
+    assert [o["allow_fake_ip"] for o in opts] == [True, False]
+    assert all(o["allow_local"] is False for o in opts)

@@ -40,6 +40,12 @@ class VisitError(Exception):
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 LOCAL_HINT = "Local sites are allowed only in mock mode or with AIR_KYA_ALLOW_LOCAL_SITES=1."
 
+# RFC 2544 benchmarking block. Never a real internet destination, so fake-IP DNS proxies (the Grok Bot
+# cloud computer, Clash/Surge/sing-box "fake-ip" mode) hand out placeholders from it and route the
+# connection by hostname. Accepted only for resolved hostnames, never as a literal IP in the site URL.
+FAKE_IP_NET = ipaddress.ip_network("198.18.0.0/15")
+FAKE_IP_HINT = "It looks like a fake-IP proxy address; allow those with AIR_KYA_ALLOW_PROXY_FAKE_IP=1."
+
 
 class ApprovalRequired(Exception):
     """Raised by a `confirm` callback: the user has not approved this disclosure yet."""
@@ -55,14 +61,21 @@ def system_resolve(host: str, port: int) -> list[str]:
     return sorted({info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)})
 
 
-def address_allowed(address: str, *, allow_local: bool = False) -> bool:
+def is_fake_ip(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%", 1)[0])
+    return ip.version == 4 and ip in FAKE_IP_NET
+
+
+def address_allowed(address: str, *, allow_local: bool = False, allow_fake_ip: bool = False) -> bool:
     ip = ipaddress.ip_address(address.split("%", 1)[0])  # drop an IPv6 zone id
     if allow_local and ip.is_loopback:
+        return True
+    if allow_fake_ip and is_fake_ip(address):
         return True
     return ip.is_global and not ip.is_multicast
 
 
-def checked_addresses(host: str, port: int, *, allow_local: bool = False,
+def checked_addresses(host: str, port: int, *, allow_local: bool = False, allow_fake_ip: bool = False,
                       resolve: Resolver = system_resolve) -> list[str]:
     """All addresses `host` resolves to, or VisitError unless every one may be contacted."""
     try:
@@ -72,24 +85,27 @@ def checked_addresses(host: str, port: int, *, allow_local: bool = False,
     if not addresses:
         raise VisitError(f"Cannot resolve {host}.", code="SITE_UNRESOLVABLE")
     for a in addresses:
-        if not address_allowed(a, allow_local=allow_local):
+        if not address_allowed(a, allow_local=allow_local, allow_fake_ip=allow_fake_ip):
+            hint = FAKE_IP_HINT if is_fake_ip(a) else ("" if allow_local else LOCAL_HINT)
             raise VisitError(f"{host} resolves to a non-public address ({a}); refusing to contact it."
-                             + ("" if allow_local else f" {LOCAL_HINT}"), code="SITE_NOT_PUBLIC")
+                             + (f" {hint}" if hint else ""), code="SITE_NOT_PUBLIC")
     return addresses
 
 
 class PublicOnlyBackend(httpcore.NetworkBackend):
     """Resolves, checks, then connects to the checked IP (TLS still verifies the hostname via SNI)."""
 
-    def __init__(self, *, allow_local: bool = False, resolve: Resolver = system_resolve,
-                 inner: httpcore.NetworkBackend | None = None):
+    def __init__(self, *, allow_local: bool = False, allow_fake_ip: bool = False,
+                 resolve: Resolver = system_resolve, inner: httpcore.NetworkBackend | None = None):
         self.allow_local = allow_local
+        self.allow_fake_ip = allow_fake_ip
         self.resolve = resolve
         self.inner = inner or httpcore.SyncBackend()
 
     def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
         last: Exception | None = None
-        for address in checked_addresses(host, port, allow_local=self.allow_local, resolve=self.resolve):
+        for address in checked_addresses(host, port, allow_local=self.allow_local, allow_fake_ip=self.allow_fake_ip,
+                                         resolve=self.resolve):
             try:
                 return self.inner.connect_tcp(address, port, timeout=timeout, local_address=local_address,
                                               socket_options=socket_options)
@@ -104,13 +120,18 @@ class PublicOnlyBackend(httpcore.NetworkBackend):
         self.inner.sleep(seconds)
 
 
-def site_client(*, allow_local: bool = False, timeout: float = 20.0, resolve: Resolver = system_resolve) -> httpx.Client:
-    """Client for model-chosen sites. No env proxies (a proxy would resolve the host itself), no redirects."""
+def site_client(*, allow_local: bool = False, allow_fake_ip: bool = False, timeout: float = 20.0,
+                resolve: Resolver = system_resolve) -> httpx.Client:
+    """Client for model-chosen sites. No env proxies (a proxy would resolve the host itself), no redirects.
+
+    `allow_fake_ip`: also connect when the host resolves into 198.18.0.0/15, where a fake-IP proxy picks the real
+    destination by hostname. Private, loopback, link-local and metadata addresses stay refused.
+    """
     transport = httpx.HTTPTransport(trust_env=False)
     pool = transport._pool
     if not isinstance(pool, httpcore.ConnectionPool) or not hasattr(pool, "_network_backend"):
         raise RuntimeError("Unsupported httpx/httpcore version: cannot pin site connections to checked addresses.")
-    pool._network_backend = PublicOnlyBackend(allow_local=allow_local, resolve=resolve)
+    pool._network_backend = PublicOnlyBackend(allow_local=allow_local, allow_fake_ip=allow_fake_ip, resolve=resolve)
     return httpx.Client(transport=transport, timeout=timeout, follow_redirects=False, trust_env=False)
 
 

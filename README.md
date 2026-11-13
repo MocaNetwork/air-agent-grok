@@ -17,34 +17,49 @@ endpoints and headers.
 
 | Path | What it is |
 |---|---|
-| `bot/description.md` | The bot's description and standing rules. Paste into the Grok Bot |
+| `bot/description.md` | Standing rules. First chat (personal Bot) or About (Team Bot) |
 | `bot/skills/air-agent-kya/SKILL.md` | The skill: install, login, visit, approval, reading results |
 | `air_kya/` | The runner the skill installs on the bot's computer (`air-kya`, or `python -m air_kya`) |
 | `tests/` | Offline tests (`pytest`) |
 
 A Grok Bot template carries the description, skills and routines, not code. So the skill installs
-`air_kya` from this repo on first use, into `~/.air-kya/venv` on the bot's cloud computer.
+`air_kya` from this repo on first use, into `~/.air-kya/venv` on the bot's cloud computer (shared by
+every Bot on the account; not your Mac).
 
 ## Publish the template
 
-1. Push this folder to `github.com/MocaNetwork/air-agent-grok` (public) and tag `v0.1.0`. The skill
-   installs from exactly that URL and tag; change both in `SKILL.md` if you use another location.
-2. In Grok Bot, create a bot named **AIR Agent KYA** and paste `bot/description.md` (below the line)
-   as its description.
-3. Add the skill: upload `bot/skills/air-agent-kya/SKILL.md` (or the folder zipped).
-4. Test with the bot (below), then **Share as template** from the bot's settings. Review the draft:
-   it must contain no keys, tokens or internal URLs. Publish for your team or publicly.
+1. In the [Grok Bot app](https://x.ai/bot), create a Bot named **AIR Agent KYA** (`Cmd/Ctrl+N`).
+   Paste `bot/description.md` (below the line) into the first chat and ask the Bot to remember those
+   standing rules. Personal Bots have no description page. A Team Bot still takes this text under
+   **About** in its details.
+2. Attach `bot/skills/air-agent-kya/SKILL.md` and ask the Bot to save it as a private skill named
+   `air-agent-kya`, keeping the approval rules as written. If this Bot does not use the skill, open
+   **Connect apps**, select the connected count, and enable it under **Private skills**. On a Team
+   Bot, **Skills** in the details panel can **Import Existing Skill** instead.
+3. Test with the Bot (below). Then click the Bot's name → **Share** → **Create a copy**. Review the
+   draft: it must contain no keys, tokens or internal URLs. Choose **Publish**, then **Copy link**.
+   On phone: **Share as Template**. Recipients open the x.ai preview and add their own copy; they do
+   not get your computer, logins or history.
 
-Releasing a new version: tag it, update the tag in `SKILL.md`, then update the bot and re-share.
+Releasing a new version: tag it, update the tag in `SKILL.md`, update the Bot, then **Update
+template** from Share.
 
 ## Try it in the bot
 
+Chat with **AIR Agent KYA** in the Grok Bot app (not grok.com chat). The first visit installs the
+runner from the public `v0.1.1` tag onto the Bot's cloud computer.
+
 1. "What does Demo Merch sell and at what prices? https://kya.demo.air3.com": the bot installs the
-   runner, visits, and answers from the Standard catalog (`verification: not_delegated`).
+   runner, runs `air-kya visit` (not a page fetch), and answers from the Standard catalog
+   (`verification: not_delegated`).
 2. "Delegate my AIR identity": the bot runs `air-kya login start` and shows a Console link and
-   code. Approve it there, tell the bot, and it runs `air-kya login finish`.
-3. "Check Demo Merch's catalog again": the bot asks before AIR shares `tier`. Say yes and it shows
-   the VIP catalog (needs Gold Membership).
+   code. Approve it there yourself, tell the bot, and it runs `air-kya login finish`. `pending`
+   means tell it to finish again.
+3. "Check Demo Merch's catalog again": the bot asks before AIR shares `tier`, naming the site and
+   fields. Say yes and it shows the VIP catalog (needs Gold Membership). A no, silence or unclear
+   answer must stop it; it must not pass `--approved` on its own.
+
+`pytest` only covers the runner, not this chat path.
 
 ## Commands
 
@@ -72,6 +87,7 @@ bundle's `partnerId` wins over `AIR_KYA_PARTNER_ID`.
 |---|---|
 | `AIR_KYA_REQUIRE_APPROVAL` | `1`: a delegated live visit stops with `approval_required` until run with `--approved` |
 | `AIR_KYA_ALLOW_LOCAL_SITES` | `0`: allow localhost sites outside mock mode (private and link-local stay blocked) |
+| `AIR_KYA_ALLOW_PROXY_FAKE_IP` | `1`: accept site hostnames that resolve into `198.18.0.0/15`, the placeholder addresses a fake-IP proxy hands out (the Grok Bot computer does this for every hostname). Never accepted as a literal IP in the URL |
 | `AIR_KYA_DIR` | `~/.air-kya/agent` |
 | `AIR_KYA_PARTNER_ID` | AIR AI Studio sandbox partner `8ab60850-bdfa-4e48-8afa-d67a3d715224` |
 | `AIR_KYA_CONSOLE_URL` | `https://sandbox.agents.air3.com` |
@@ -89,7 +105,10 @@ Read before adding the template:
   (`air.api.sandbox.air3.com`) and credential API (`credential-testnet.api.sandbox.air3.com`), and
   each KYA site the bot visits (`/.well-known/air-kya`, `/kya/challenge`, `/catalog`). Sites: https
   only, public addresses only; each connection resolves the host, refuses private, loopback,
-  link-local and cloud-metadata addresses, and connects to the address it checked.
+  link-local and cloud-metadata addresses, and connects to the address it checked. Exception: the
+  Grok Bot computer resolves every hostname to a placeholder in `198.18.0.0/15` and its egress proxy
+  picks the real destination, so for those the check can't see where the request really goes and
+  relies on that proxy (`AIR_KYA_ALLOW_PROXY_FAKE_IP=0` to refuse them).
 - **Stored credentials:** a P-256 agent private key and the AIR delegation bundle in
   `~/.air-kya/agent/`, mode 0600, on the bot's cloud computer. `air-kya logout` deletes them; revoke
   the key in the AIR Console too.

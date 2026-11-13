@@ -13,7 +13,7 @@ import sys
 
 import httpx
 
-from . import air
+from . import __version__, air
 from .kya import MOCK_PROFILES, ApprovalRequired, VisitError, site_client, visit
 
 DEFAULT_AGENT_LABEL = "Grok Bot (AIR Agent KYA)"
@@ -80,6 +80,8 @@ def run_visit(site: str, mock: str | None, approved: bool) -> dict:
     # The model picks `site`: those requests only reach public addresses (loopback too in mock mode or with
     # AIR_KYA_ALLOW_LOCAL_SITES). AIR endpoints come from settings, so they keep a plain client.
     allow_local = bool(mock) or flag("allow_local_sites", False)
+    # On by default: the Grok Bot computer resolves every hostname into 198.18.0.0/15 behind its egress proxy.
+    allow_fake_ip = flag("allow_proxy_fake_ip", True)
     ask = flag("require_approval", True) and not approved
 
     def confirm(info: dict) -> None:
@@ -93,7 +95,7 @@ def run_visit(site: str, mock: str | None, approved: bool) -> dict:
                         "A no means no; do not retry."),
         })
 
-    with _air_client() as http, site_client(allow_local=allow_local) as site_http:
+    with _air_client() as http, site_client(allow_local=allow_local, allow_fake_ip=allow_fake_ip) as site_http:
         try:
             return visit(site, http=http, site_http=site_http, mock=mock, env=_env(),
                          delegation=air.load_delegation(_dir()),
@@ -108,6 +110,7 @@ def run_visit(site: str, mock: str | None, approved: bool) -> dict:
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="air-kya", description="AIR Agent KYA for Grok Bot. Prints JSON.")
+    p.add_argument("--version", action="version", version=f"air-kya {__version__}")
     subs = p.add_subparsers(dest="command", required=True)
     subs.add_parser("whoami", help="Show the stored delegation")
     p_login = subs.add_parser("login", help="Delegate the user's AIR identity (two steps)")

@@ -38,7 +38,7 @@ BIND_SCOPES = ["openid", "credentials.read", "credentials.verify"]
 MERCHANT_SESSION_SCOPE = "openid credentials.verify"
 FULL_SESSION_SCOPE = "openid credentials.read credentials.verify"
 CLIENT_ID = "air-agent-broker"
-USER_AGENT = "air-agent-kya-grok/0.1"
+USER_AGENT = "air-agent-kya-grok/0.1.1"
 
 KEY_FILE = "agent-key.pem"
 BUNDLE_FILE = "bundle.json"

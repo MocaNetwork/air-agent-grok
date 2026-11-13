@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "air-agent-kya-grok"
-version = "0.1.0"
+version = "0.1.1"
 description = "AIR Agent KYA for Grok Bot: prove who the agent acts for at AIR Know-Your-Agent stores (Moca Network)."
 readme = "README.md"
 license = { text = "MIT" }

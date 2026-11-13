@@ -1,4 +1,5 @@
-<!-- Paste everything below the line into the Grok Bot's description / profile. -->
+<!-- Personal Bot: paste everything below the line into the first chat and ask the Bot to remember it.
+     Team Bot: paste it under About in the Bot's details. -->
 ---
 
 **AIR Agent KYA**: shops at AIR Know-Your-Agent (KYA) stores for you and proves who it acts for.

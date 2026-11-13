@@ -22,14 +22,19 @@ fetching the page yourself: it always returns the catalog this agent is entitled
 
 ## Setup (once per bot computer)
 
-Check first: `~/.air-kya/venv/bin/air-kya whoami`. If that command is missing, install it:
+Check first: `~/.air-kya/venv/bin/air-kya --version`. If that command is missing or prints anything
+other than `air-kya 0.1.1`, (re)install it:
 
 ```bash
 python3 -m venv ~/.air-kya/venv
-~/.air-kya/venv/bin/pip install --quiet "air-agent-kya-grok @ git+https://github.com/MocaNetwork/air-agent-grok@v0.1.0"
+~/.air-kya/venv/bin/pip install --quiet --force-reinstall --no-deps "air-agent-kya-grok @ git+https://github.com/MocaNetwork/air-agent-grok@v0.1.1"
+~/.air-kya/venv/bin/pip install --quiet "air-agent-kya-grok @ git+https://github.com/MocaNetwork/air-agent-grok@v0.1.1"
 ```
 
-Install only from that exact URL and tag. Below, `air-kya` means `~/.air-kya/venv/bin/air-kya`.
+Reinstalling keeps the delegation: it lives in `~/.air-kya/agent/`, not in the venv.
+
+Install only from that exact URL and tag. The repository and tag must be public; this computer is
+the Bot's cloud computer, not the user's Mac. Below, `air-kya` means `~/.air-kya/venv/bin/air-kya`.
 Every command prints one JSON object.
 
 ## Commands
@@ -80,7 +85,7 @@ Only when the user asks to delegate, or after a `not_delegated` / 401 / 403 resu
 | `verification: not_delegated` | Not delegated; got the catalog for unverified visitors | Answer from that catalog, then offer the login above to unlock the verified catalog |
 | `agent/session 401/403` | Key revoked or replaced | Offer the login again |
 | `retryable: true` (`CREDENTIAL_STORAGE_UNAVAILABLE`) | AIR storage outage | Retry once later; not the same as ineligible |
-| `code: SITE_NOT_PUBLIC` | Site resolves to a private or local address | Report it; do not try to work around it |
+| `code: SITE_NOT_PUBLIC` | Site resolves to a private or local address | Report it; do not try to work around it. If the message names a `198.18.x`/`198.19.x` address, check `air-kya --version` and reinstall as in Setup |
 | `MOCK_REQUIRED` / `MOCK_REJECTED` | Mode mismatch | Add or drop `--mock` |
 
 ## Rules
